@@ -77,79 +77,80 @@ assert args.scale in [0.25, 0.5, 1.0, 2.0, 4.0]
 if not args.img is None:
     args.png = True
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-torch.set_grad_enabled(False)
-if torch.cuda.is_available():
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = True
-    if(args.fp16):
-        torch.set_default_tensor_type(torch.cuda.HalfTensor)
+def run_infer(args):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.set_grad_enabled(False)
+    if torch.cuda.is_available():
+        torch.backends.cudnn.enabled = True
+        torch.backends.cudnn.benchmark = True
+        if(args.fp16):
+            torch.set_default_tensor_type(torch.cuda.HalfTensor)
 
-try:
     try:
         try:
-            from model.RIFE_HDv2 import Model
-            model = Model()
-            model.load_model(args.modelDir, -1)
-            print("Loaded v2.x HD model.")
+            try:
+                from model.RIFE_HDv2 import Model
+                model = Model()
+                model.load_model(args.modelDir, -1)
+                print("Loaded v2.x HD model.")
+            except:
+                from train_log.RIFE_HDv3 import Model
+                model = Model()
+                model.load_model(args.modelDir, -1)
+                print("Loaded v3.x HD model.")
         except:
-            from train_log.RIFE_HDv3 import Model
+            from model.RIFE_HD import Model
             model = Model()
             model.load_model(args.modelDir, -1)
-            print("Loaded v3.x HD model.")
+            print("Loaded v1.x HD model")
     except:
-        from model.RIFE_HD import Model
+        from model.RIFE import Model
         model = Model()
         model.load_model(args.modelDir, -1)
-        print("Loaded v1.x HD model")
-except:
-    from model.RIFE import Model
-    model = Model()
-    model.load_model(args.modelDir, -1)
-    print("Loaded ArXiv-RIFE model")
-model.eval()
-model.device()
+        print("Loaded ArXiv-RIFE model")
+    model.eval()
+    model.device()
 
-if not args.video is None:
-    videoCapture = cv2.VideoCapture(args.video)
-    fps = videoCapture.get(cv2.CAP_PROP_FPS)
-    tot_frame = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
-    videoCapture.release()
-    if args.fps is None:
-        fpsNotAssigned = True
-        args.fps = fps * (2 ** args.exp)
+    if not args.video is None:
+        videoCapture = cv2.VideoCapture(args.video)
+        fps = videoCapture.get(cv2.CAP_PROP_FPS)
+        tot_frame = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
+        videoCapture.release()
+        if args.fps is None:
+            fpsNotAssigned = True
+            args.fps = fps * (2 ** args.exp)
+        else:
+            fpsNotAssigned = False
+        videogen = skvideo.io.vreader(args.video)
+        lastframe = next(videogen)
+        fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+        video_path_wo_ext, ext = os.path.splitext(args.video)
+        print('{}.{}, {} frames in total, {}FPS to {}FPS'.format(video_path_wo_ext, args.ext, tot_frame, fps, args.fps))
+        if args.png == False and fpsNotAssigned == True:
+            print("The audio will be merged after interpolation process")
+        else:
+            print("Will not merge audio because using png or fps flag!")
     else:
-        fpsNotAssigned = False
-    videogen = skvideo.io.vreader(args.video)
-    lastframe = next(videogen)
-    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-    video_path_wo_ext, ext = os.path.splitext(args.video)
-    print('{}.{}, {} frames in total, {}FPS to {}FPS'.format(video_path_wo_ext, args.ext, tot_frame, fps, args.fps))
-    if args.png == False and fpsNotAssigned == True:
-        print("The audio will be merged after interpolation process")
+        videogen = []
+        for f in os.listdir(args.img):
+            if 'png' in f:
+                videogen.append(f)
+        tot_frame = len(videogen)
+        videogen.sort(key= lambda x:int(x[:-4]))
+        lastframe = cv2.imread(os.path.join(args.img, videogen[0]), cv2.IMREAD_UNCHANGED)[:, :, ::-1].copy()
+        videogen = videogen[1:]
+    h, w, _ = lastframe.shape
+    vid_out_name = None
+    vid_out = None
+    if args.png:
+        if not os.path.exists('vid_out'):
+            os.mkdir('vid_out')
     else:
-        print("Will not merge audio because using png or fps flag!")
-else:
-    videogen = []
-    for f in os.listdir(args.img):
-        if 'png' in f:
-            videogen.append(f)
-    tot_frame = len(videogen)
-    videogen.sort(key= lambda x:int(x[:-4]))
-    lastframe = cv2.imread(os.path.join(args.img, videogen[0]), cv2.IMREAD_UNCHANGED)[:, :, ::-1].copy()
-    videogen = videogen[1:]
-h, w, _ = lastframe.shape
-vid_out_name = None
-vid_out = None
-if args.png:
-    if not os.path.exists('vid_out'):
-        os.mkdir('vid_out')
-else:
-    if args.output is not None:
-        vid_out_name = args.output
-    else:
-        vid_out_name = '{}_{}X_{}fps.{}'.format(video_path_wo_ext, (2 ** args.exp), int(np.round(args.fps)), args.ext)
-    vid_out = cv2.VideoWriter(vid_out_name, fourcc, args.fps, (w, h))
+        if args.output is not None:
+            vid_out_name = args.output
+        else:
+            vid_out_name = '{}_{}X_{}fps.{}'.format(video_path_wo_ext, (2 ** args.exp), int(np.round(args.fps)), args.ext)
+        vid_out = cv2.VideoWriter(vid_out_name, fourcc, args.fps, (w, h))
 
 def clear_write_buffer(user_args, write_buffer):
     cnt = 0
