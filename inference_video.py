@@ -9,7 +9,7 @@ import warnings
 import _thread
 import skvideo.io
 from queue import Queue, Empty
-from model.pytorch_msssim import ssim_matlab
+from rife.model.pytorch_msssim import ssim_matlab
 
 warnings.filterwarnings("ignore")
 
@@ -68,7 +68,6 @@ parser.add_argument('--png', dest='png', action='store_true', help='whether to v
 parser.add_argument('--ext', dest='ext', type=str, default='mp4', help='vid_out video extension')
 parser.add_argument('--exp', dest='exp', type=int, default=1)
 args = parser.parse_args()
-assert (not args.video is None or not args.img is None)
 if args.skip:
     print("skip flag is abandoned, please refer to issue #207.")
 if args.UHD and args.scale==1.0:
