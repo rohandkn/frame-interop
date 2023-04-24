@@ -10,6 +10,8 @@ import _thread
 import skvideo.io
 from queue import Queue, Empty
 from rife.model.pytorch_msssim import ssim_matlab
+import sys
+sys.path.append("/home/mverghese/Documents/vignesh-VLR/sketch2vid/rife")
 
 warnings.filterwarnings("ignore")
 
@@ -79,51 +81,55 @@ if not args.img is None:
 def run_infer(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.set_grad_enabled(False)
+    args['fp16'] = False
+    args['modelDir'] = 'train_log'
     if torch.cuda.is_available():
         torch.backends.cudnn.enabled = True
         torch.backends.cudnn.benchmark = True
-        if(args.fp16):
+        print(args)
+        if(args['fp16']):
             torch.set_default_tensor_type(torch.cuda.HalfTensor)
 
     try:
         try:
             try:
-                from model.RIFE_HDv2 import Model
+                from rife.model.RIFE_HDv2 import Model
                 model = Model()
-                model.load_model(args.modelDir, -1)
+                model.load_model(args['modelDir'], -1)
                 print("Loaded v2.x HD model.")
             except:
                 from train_log.RIFE_HDv3 import Model
                 model = Model()
-                model.load_model(args.modelDir, -1)
+                model.load_model(args['modelDir'], -1)
                 print("Loaded v3.x HD model.")
         except:
-            from model.RIFE_HD import Model
+            from rife.model.RIFE_HD import Model
             model = Model()
-            model.load_model(args.modelDir, -1)
+            model.load_model(args['modelDir'], -1)
             print("Loaded v1.x HD model")
     except:
-        from model.RIFE import Model
+        from rife.model.RIFE import Model
         model = Model()
-        model.load_model(args.modelDir, -1)
+        model.load_model(args['modelDir'], -1)
         print("Loaded ArXiv-RIFE model")
     model.eval()
     model.device()
 
-    if not args.video is None:
-        videoCapture = cv2.VideoCapture(args.video)
+    if not args['video'] is None:
+        videoCapture = cv2.VideoCapture(args['video'])
         fps = videoCapture.get(cv2.CAP_PROP_FPS)
         tot_frame = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
+        print(tot_frame)
         videoCapture.release()
-        if args.fps is None:
+        if args['fps'] is None:
             fpsNotAssigned = True
-            args.fps = fps * (2 ** args.exp)
+            args['fps'] = fps * (2 ** args['exp'])
         else:
             fpsNotAssigned = False
-        videogen = skvideo.io.vreader(args.video)
+        videogen = skvideo.io.vreader(args['video'])
         lastframe = next(videogen)
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        video_path_wo_ext, ext = os.path.splitext(args.video)
+        video_path_wo_ext, ext = os.path.splitext(args['video'])
         print('{}.{}, {} frames in total, {}FPS to {}FPS'.format(video_path_wo_ext, args.ext, tot_frame, fps, args.fps))
         if args.png == False and fpsNotAssigned == True:
             print("The audio will be merged after interpolation process")
